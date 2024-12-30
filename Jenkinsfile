@@ -12,13 +12,19 @@ pipeline{
                 checkout scm
             }
         }
+        stage('Install dependencies') {
+            steps {
+                echo 'Installing dependencies'
+                sh 'pip3 install -r requirements.txt'
+            }
+        }
         stage('Tests') {
             steps {
                 echo 'Running tests'
                 sh 'python3 -m unittest discover -s tests'
             }
         }
-        stage('Build') {
+        stage('Build image') {
             steps {
                 echo 'Building docker image'
                 script {
