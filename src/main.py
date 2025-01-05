@@ -1,8 +1,10 @@
 """
-Pulls a list of numbers from Redis and adds them.
-Returns the sum of the numbers to Redis.
+Pulls a list of numbers from RabbitMQ and adds them.
+Returns the sum of the numbers to RabbitMQ.
 """
-from redis import Redis
+from src.rabbitmq import RabbitMQ
+import json
+
 
 def is_number(a):
     """
@@ -27,27 +29,39 @@ def add(*args):
             return "Error: arguments must be numbers"
     return sum(map(float, args))
 
+def callback(ch, method, properties, body):
+    """
+    Callback function
+    :param ch: channel
+    :param method: method
+    :param properties: properties
+    :param body: message
+    """
+    print(f'Received message: {body}')
+
 def main():
     """
     Main function
-    Pulls a list of numbers from Redis and adds them.
-    Returns the sum of the numbers to Redis.
-    If the list is empty or contains non-numeric values,
-        it returns an error message to Redis.
+    Constantly listens for messages from RabbitMQ,
+    converts them to JSON, checks if they are numbers,
+    adds them and sends the result back to RabbitMQ
     """
-    redis = Redis(
-        host='redis',
-        port=6379,
-        db=0,
-        decode_responses=True,
-        charset='utf-8',
-        socket_timeout=5
-    )
-    redis_list = redis.lrange('numbers', 0, -1)
-    if not redis_list:
-        redis.set('sum', 'Error: list is empty')
-    sum_ = add(*redis_list)
-    redis.set('sum', sum_)
+    rabbitmq = RabbitMQ()
+    try:
+        raw_data = rabbitmq.consume('add', callback)
+        json_data = json.loads(raw_data)
+        if json_data['num1'] and json_data['num2']:
+            result = add(json_data['num1'], json_data['num2'])
+            json_to_send = json.dumps({'service': 'add', 'result': result})
+            rabbitmq.publish('add', json_to_send)
+    except Exception as e:
+        print(f'Error: {e}')
+        json_to_send = json.dumps({'service': 'add', 'result': e})
+        rabbitmq.publish('add', json_to_send)
+    finally:
+        rabbitmq.close()
+
+
 
 if __name__ == '__main__':
     main()
